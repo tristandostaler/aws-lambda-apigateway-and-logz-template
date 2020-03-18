@@ -1,0 +1,58 @@
+image: "python:3.6"
+
+before_script: # https://gist.github.com/m8r1x/8b5c8267078007984a29b03c2db1fe05
+  - apt-get update -y  # Updating the Ubuntu Docker instance.
+  - python -V  # Print out python version for debugging.
+  - apt install -y zip jq
+  - pip install awscli --upgrade --user
+  - pip install requests --upgrade --user
+  - pip install boto3 --upgrade --user
+  - export PATH=~/.local/bin:$PATH # Required for awscli.
+  - aws --version  # Print out aws cli version for debugging.
+
+stages:
+  - lambda
+  - apilogz
+
+variables:
+  # NOTE: the only variable to modify here on the first setup is LAMBDA_NAME
+  LAMBDA_NAME: 'Template'   # Replace it with the name of aws lambda function you want.
+  S3_BUCKET: 's3-bucket-gitlab-deployment'   # Replace it with the name of Bucket that will hold the zip code.
+  LAMBDA_RUNTIME: 'python3.6'
+  LAMBDA_ARN: 'arn:aws:iam::000000000000:role/Lambda-Role' # ARN associated with this lambda function.
+  LAMBDA_HANDLER: 'lambda_function.lambda_handler'  # This is default lambda handler.
+  LAMBDA_REGION: 'ca-central-1'
+  
+
+lambda:
+  stage: lambda
+  
+  only:
+  - master   # We will run the CD only when something is going to change in master branch.
+
+  script:
+  - if [ "$LAMBDA_NAME" == "Template" ]; then echo >&2 'You need to change the variable LAMBDA_NAME!'; exit 1; fi
+  - echo "Starting the deployment of the lambda."
+  - zip -r $LAMBDA_NAME.zip . -x \*.pyc *.git*   # Archive the code repository.
+  - aws s3 cp $LAMBDA_NAME.zip s3://$S3_BUCKET/$LAMBDA_NAME.zip # Upload archive into s3.
+  - aws lambda update-function-code --function-name $LAMBDA_NAME --zip-file fileb://$LAMBDA_NAME.zip --region $LAMBDA_REGION || aws lambda create-function --function-name $LAMBDA_NAME --runtime $LAMBDA_RUNTIME --role $LAMBDA_ARN --handler $LAMBDA_HANDLER --code S3Bucket=$S3_BUCKET,S3Key=$LAMBDA_NAME.zip --memory-size 1024 --region $LAMBDA_REGION --timeout 900
+  - echo "Deployment of the lambda done."
+
+  environment:
+    name: master
+
+apilogz:
+  stage: apilogz
+  
+  only:
+  - master   # We will run the CD only when something is going to change in master branch.
+
+  script:
+  - if [ "$LAMBDA_NAME" == "Template" ]; then echo >&2 'You need to change the variable LAMBDA_NAME!'; exit 1; fi
+  - echo "Deploying the API gateway endpoint and Updating Logz with the endpoint details."
+  - cd deploy
+  - python deploy-apigateway-and-logz.py $LAMBDA_NAME $LAMBDA_REGION
+  - echo "Deployment of the API gateway and binding to Logz done"
+
+  environment:
+    name: master
