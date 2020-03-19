@@ -15,13 +15,15 @@ stages:
   - apilogz
 
 variables:
-  # NOTE: the only variable to modify here on the first setup is LAMBDA_NAME
+  # ################  SECTION TO MODIFY ################
+  # Needed environment variables (gitlab repo -> settings -> CI/CD -> Variables): AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, LOGZ_USERNAME, LOGZ_PASSWORD
+  # Then modify the variables bellow to match your setup
   LAMBDA_NAME: 'Template'   # Replace it with the name of aws lambda function you want.
   S3_BUCKET: 's3-bucket-gitlab-deployment'   # Replace it with the name of Bucket that will hold the zip code.
-  LAMBDA_RUNTIME: 'python3.6'
-  LAMBDA_ARN: 'arn:aws:iam::000000000000:role/Lambda-Role' # ARN associated with this lambda function.
-  LAMBDA_HANDLER: 'lambda_function.lambda_handler'  # This is default lambda handler.
-  LAMBDA_REGION: 'ca-central-1'
+  LAMBDA_RUNTIME: 'python3.6' # The lambda runtime to use with the code to deploy. This script assumes python
+  LAMBDA_ARN: 'arn:aws:iam::000000000000:role/Lambda-Role' # ARN for the role associated with this lambda function.
+  LAMBDA_HANDLER: 'lambda_function.lambda_handler'  # This is default lambda handler. Leave it as is unless you modify the default handler python filename
+  LAMBDA_REGION: 'ca-central-1' # This is the region where you want your setup
   
 
 lambda:
@@ -31,7 +33,7 @@ lambda:
   - master   # We will run the CD only when something is going to change in master branch.
 
   script:
-  - if [ "$LAMBDA_NAME" == "Template" ]; then echo >&2 'You need to change the variable LAMBDA_NAME!'; exit 1; fi
+  - if [ "$LAMBDA_NAME" == "Template" ]; then echo >&2 'You need to change the variables and set the environment variables!'; exit 1; fi
   - echo "Starting the deployment of the lambda."
   - zip -r $LAMBDA_NAME.zip . -x \*.pyc *.git*   # Archive the code repository.
   - aws s3 cp $LAMBDA_NAME.zip s3://$S3_BUCKET/$LAMBDA_NAME.zip # Upload archive into s3.
